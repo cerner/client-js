@@ -275,13 +275,16 @@ BBClient.ready = function(input, callback, errback){
     // Check if 2 minutes from access token expiration timestamp
     var tokenResponse = getPreviousToken();
     var payloadCheck = jwt.decode(tokenResponse.access_token);
-    var nearExpTime = Math.floor(Date.now() / 1000) >= (payloadCheck['exp'] - 120);
-
-    if (tokenResponse.refresh_token
-      && tokenResponse.scope.indexOf('online_access') > -1
-      && nearExpTime) { // refresh token flow
-      accessTokenResolver = completeTokenRefreshFlow();
-    } else { // existing access token flow
+    if (payloadCheck && payloadCheck['exp']) {
+      var nearExpTime = Math.floor(Date.now() / 1000) >= (payloadCheck['exp'] - 120);
+      if (tokenResponse.refresh_token
+        && tokenResponse.scope.indexOf('online_access') > -1
+        && nearExpTime) { // refresh token flow
+        accessTokenResolver = completeTokenRefreshFlow();
+      } else { // existing access token flow
+        accessTokenResolver = completePageReload();
+      }
+    } else {
       accessTokenResolver = completePageReload();
     }
   } else if (isCode) { // code flow
