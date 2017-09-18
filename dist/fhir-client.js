@@ -17172,6 +17172,9 @@ BBClient.ready = function(input, callback, errback){
   var accessTokenResolver = null;
 
   if (isFakeOAuthToken()) {
+    if (window.history.replaceState && BBClient.settings.replaceBrowserHistory){
+      window.history.replaceState({}, "", window.location.toString().replace(window.location.search, ""));
+    }
     accessTokenResolver = completePageReload();
   } else {
     if (validTokenResponse()) { // we're reloading after successful completion
@@ -17394,7 +17397,7 @@ BBClient.authorize = function(params, errback){
         sessionStorage[state] = JSON.stringify(combinedObject);
       }
 
-      window.location.href = client.redirect_uri + "#state="+encodeURIComponent(state);
+      window.location.href = client.redirect_uri + "?state="+encodeURIComponent(state);
       return;
     }
     
