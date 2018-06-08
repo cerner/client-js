@@ -6976,6 +6976,17 @@ function FhirClient(p) {
       serviceUrl: p.serviceUrl,
       auth: p.auth || {type: 'none'}
     }
+
+    function getFhirConfig() {
+      var fhirConfig = {
+        baseUrl: server.serviceUrl,
+        auth: auth
+      };
+      if (client.headers) {
+        fhirConfig.headers = client.headers;
+      }
+      return fhirConfig;
+    }
     
     var auth = {};
     
@@ -6990,25 +7001,53 @@ function FhirClient(p) {
         };
     }
     
-    client.api = fhir({
+    // client.api = fhir({
+    //     baseUrl: server.serviceUrl,
+    //     auth: auth
+    // });
+
+    function getPatientFhirConfig() {
+      var patientFhirConfig = {
         baseUrl: server.serviceUrl,
-        auth: auth
-    });
+        auth: auth,
+        patient: p.patientId
+      };
+      if (client.headers) {
+        patientFhirConfig.headers = client.headers;
+      }
+      console.log("GET PATIENT FHIR CONFIG", patientFhirConfig);
+      return patientFhirConfig;
+    }
+
+    client.setHeaders = function(customHeaders) {
+      if (customHeaders) {
+        client.headers = customHeaders;
+        // Reset the client patient API FHIR object that gets passed via the client to accept any custom headers
+        if (p.patientId) {
+          var patientFhirConfig = getPatientFhirConfig();
+          client.patient.api = fhir(patientFhirConfig);
+        }
+        console.log("SET HEADERS", customHeaders);
+      } else {
+        if (client.headers) {
+          delete client['headers'];
+        }
+      }
+    }
+
+    client.api = function() {
+      return fhir(getFhirConfig());
+    }
     
     if (p.patientId) {
         client.patient = {};
         client.patient.id = p.patientId;
-        client.patient.api = fhir({
-            baseUrl: server.serviceUrl,
-            auth: auth,
-            patient: p.patientId
-        });
+
+        client.patient.api = fhir(getPatientFhirConfig());
         client.patient.read = function(){
             return client.get({resource: 'Patient'});
         };
     }
-    
-    var fhirAPI = (client.patient)?client.patient.api:client.api;
 
     client.userId = p.userId;
 
@@ -7042,6 +7081,7 @@ function FhirClient(p) {
     client.get = function(p) {
         var ret = Adapter.get().defer();
         var params = {type: p.resource};
+        var fhirAPI = (client.patient) ? client.patient.api : client.api;
         
         if (p.id) {
             params["id"] = p.id;

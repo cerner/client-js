@@ -53,7 +53,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /************************************************************************/
 /******/ ([
 /* 0 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var mkFhir = __webpack_require__(1);
@@ -93,9 +93,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 1 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var utils = __webpack_require__(2);
@@ -128,13 +128,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	                .and(auth.$Bearer)
 	                .and(auth.$Credentials)
 	                .and(transport.$JsonData)
-	                .and($$Header('Accept', 'application/json'))
-	                .and($$Header('Content-Type', 'application/json'));
+	                .and($$Header('Accept', (cfg.headers && cfg.headers['Accept']) ? cfg.headers['Accept'] : 'application/json'))
+	                .and($$Header('Content-Type', (cfg.headers && cfg.headers['Content-Type']) ? cfg.headers['Content-Type'] : 'application/json'));
 
 	        var GET = Defaults.and($$Method('GET'));
 	        var POST = Defaults.and($$Method('POST'));
 	        var PUT = Defaults.and($$Method('PUT'));
 	        var DELETE = Defaults.and($$Method('DELETE'));
+	        var PATCH = Defaults.and($$Method('PATCH'));
 
 	        var http = transport.Http(cfg, adapter);
 
@@ -168,18 +169,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	            search: GET.and(resourceTypePath).and(pt.$WithPatient).and(query.$SearchParams).and($Paging).end(http),
 	            update: PUT.and(resourcePath).and(ReturnHeader).end(http),
 	            nextPage: GET.and(bundle.$$BundleLinkUrl("next")).end(http),
-	            prevPage: GET.and(bundle.$$BundleLinkUrl("prev")).end(http),
-	            resolve: GET.and(refs.resolve).end(http)
+	            // For previous page, bundle.link.relation can either have 'previous' or 'prev' values
+	            prevPage: GET.and(bundle.$$BundleLinkUrl("previous")).and(bundle.$$BundleLinkUrl("prev")).end(http),
+	            resolve: GET.and(refs.resolve).end(http),
+	            patch: PATCH.and(resourcePath).and($$Header('Content-Type', 'application/json-patch+json')).end(http)
 	        }, adapter);
-
 	    };
 	    module.exports = fhir;
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 2 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	  var merge = __webpack_require__(3);
@@ -356,12 +358,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 3 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(module) {/*!
-	 * @name JavaScript/NodeJS Merge v1.1.3
+	 * @name JavaScript/NodeJS Merge v1.2.0
 	 * @author yeikos
 	 * @repository https://github.com/yeikos/js.merge
 
@@ -371,31 +373,39 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	;(function(isNode) {
 
-		function merge() {
+		/**
+		 * Merge one or more objects 
+		 * @param bool? clone
+		 * @param mixed,... arguments
+		 * @return object
+		 */
 
-			var items = Array.prototype.slice.call(arguments),
-				result = items.shift(),
-				deep = (result === true),
-				size = items.length,
-				item, index, key;
+		var Public = function(clone) {
 
-			if (deep || typeOf(result) !== 'object')
+			return merge(clone === true, false, arguments);
 
-				result = {};
+		}, publicName = 'merge';
 
-			for (index=0;index<size;++index)
+		/**
+		 * Merge two or more objects recursively 
+		 * @param bool? clone
+		 * @param mixed,... arguments
+		 * @return object
+		 */
 
-				if (typeOf(item = items[index]) === 'object')
+		Public.recursive = function(clone) {
 
-					for (key in item)
+			return merge(clone === true, true, arguments);
 
-						result[key] = deep ? clone(item[key]) : item[key];
+		};
 
-			return result;
+		/**
+		 * Clone the input removing any reference
+		 * @param mixed input
+		 * @return mixed
+		 */
 
-		}
-
-		function clone(input) {
+		Public.clone = function(input) {
 
 			var output = input,
 				type = typeOf(input),
@@ -408,7 +418,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 				for (index=0;index<size;++index)
 
-					output[index] = clone(input[index]);
+					output[index] = Public.clone(input[index]);
 
 			} else if (type === 'object') {
 
@@ -416,36 +426,122 @@ return /******/ (function(modules) { // webpackBootstrap
 
 				for (index in input)
 
-					output[index] = clone(input[index]);
+					output[index] = Public.clone(input[index]);
 
 			}
 
 			return output;
 
+		};
+
+		/**
+		 * Merge two objects recursively
+		 * @param mixed input
+		 * @param mixed extend
+		 * @return mixed
+		 */
+
+		function merge_recursive(base, extend) {
+
+			if (typeOf(base) !== 'object')
+
+				return extend;
+
+			for (var key in extend) {
+
+				if (typeOf(base[key]) === 'object' && typeOf(extend[key]) === 'object') {
+
+					base[key] = merge_recursive(base[key], extend[key]);
+
+				} else {
+
+					base[key] = extend[key];
+
+				}
+
+			}
+
+			return base;
+
 		}
+
+		/**
+		 * Merge two or more objects
+		 * @param bool clone
+		 * @param bool recursive
+		 * @param array argv
+		 * @return object
+		 */
+
+		function merge(clone, recursive, argv) {
+
+			var result = argv[0],
+				size = argv.length;
+
+			if (clone || typeOf(result) !== 'object')
+
+				result = {};
+
+			for (var index=0;index<size;++index) {
+
+				var item = argv[index],
+
+					type = typeOf(item);
+
+				if (type !== 'object') continue;
+
+				for (var key in item) {
+
+					var sitem = clone ? Public.clone(item[key]) : item[key];
+
+					if (recursive) {
+
+						result[key] = merge_recursive(result[key], sitem);
+
+					} else {
+
+						result[key] = sitem;
+
+					}
+
+				}
+
+			}
+
+			return result;
+
+		}
+
+		/**
+		 * Get type of variable
+		 * @param mixed input
+		 * @return string
+		 *
+		 * @see http://jsperf.com/typeofvar
+		 */
 
 		function typeOf(input) {
 
-			return ({}).toString.call(input).match(/\s([\w]+)/)[1].toLowerCase();
+			return ({}).toString.call(input).slice(8, -1).toLowerCase();
 
 		}
 
 		if (isNode) {
 
-			module.exports = merge;
+			module.exports = Public;
 
 		} else {
 
-			window.merge = merge;
+			window[publicName] = Public;
 
 		}
 
 	})(typeof module === 'object' && module && typeof module.exports === 'object' && module.exports);
 	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(4)(module)))
 
-/***/ },
+/***/ }),
 /* 4 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	module.exports = function(module) {
 		if(!module.webpackPolyfill) {
@@ -459,9 +555,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}
 
 
-/***/ },
+/***/ }),
 /* 5 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var utils = __webpack_require__(2);
@@ -546,9 +642,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 6 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var utils = __webpack_require__(2);
@@ -736,9 +832,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 7 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var mw = __webpack_require__(5);
@@ -777,9 +873,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 8 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	;(function () {
 
@@ -844,9 +940,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}());
 
 
-/***/ },
+/***/ }),
 /* 9 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var utils = __webpack_require__(2);
@@ -865,7 +961,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    };
 
 	    var toJson = function(x){
-	        return (utils.type(x) == 'object') ? JSON.stringify(x) : x;
+	        return (utils.type(x) == 'object' || utils.type(x) == 'array') ? JSON.stringify(x) : x;
 	    };
 
 	    exports.$JsonData = function(h){
@@ -881,9 +977,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 10 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	module.exports = function(h){
 	    return function(args){
@@ -909,9 +1005,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 
 
-/***/ },
+/***/ }),
 /* 11 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	(function() {
 	    var copyAttr = function(from, to, attr){
@@ -928,6 +1024,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	                copyAttr(cfg, args, 'auth');
 	                copyAttr(cfg, args, 'patient');
 	                copyAttr(cfg, args, 'debug');
+	                copyAttr(cfg, args, 'credentials');
+	                copyAttr(cfg, args, 'headers');
+	                copyAttr(cfg, args, 'agentOptions');
 	                copyAttr(adapter, args, 'defer');
 	                copyAttr(adapter, args, 'http');
 	                return h(args);
@@ -937,9 +1036,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 12 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	exports.$$BundleLinkUrl =  function(rel){
 	    return function(h) {
@@ -949,19 +1048,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	            if(res && res.url){
 	                args.url = res.url;
 	                args.data = null;
-	                return h(args);
 	            }
-	            else{
-	                throw new Error("No " + rel + " link found in bundle");
-	            }
+	            return h(args);
 	        };
 	    };
 	};
 
 
-/***/ },
+/***/ }),
 /* 13 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var mw = __webpack_require__(5);
@@ -1035,9 +1131,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 14 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var utils = __webpack_require__(2);
@@ -1093,9 +1189,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 15 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ (function(module, exports, __webpack_require__) {
 
 	(function() {
 	    var utils = __webpack_require__(2);
@@ -1154,9 +1250,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	}).call(this);
 
 
-/***/ },
+/***/ }),
 /* 16 */
-/***/ function(module, exports) {
+/***/ (function(module, exports) {
 
 	(function() {
 	    var fhirAPI;
@@ -1223,32 +1319,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	                var resolvedReferences = {};
 
-	                var queue = [function() {
-	                    var entries = results.data.entry || [];
-	                    var res = entries.map(function(r){
-	                        return r.resource;
-	                    });
-	                    var refs = function (resource, reference) {
-	                        var refID = normalizeRefID(resource,reference);
-	                        return resolvedReferences[refID];
-	                    };
-	                    ret.resolve(res,refs);
-	                }];
-
-	                function normalizeRefID (resource, reference) {
-	                    var refID = reference.reference;
-	                    if (refID.startsWith('#')) {
-	                        var resourceID = resource.resourceType + "/" + resource.id;
-	                        return resourceID + refID;
-	                    } else {
-	                        return refID;
-	                    }
-	                }
+	                var queue = [function() {ret.resolve(results, resolvedReferences);}];
 	                
 	                function enqueue (bundle,resource,reference) {
-	                  queue.push(function() {
-	                    resolveReference(bundle,resource,reference);
-	                  });
+	                  queue.push(function() {resolveReference(bundle,resource,reference)});
 	                }
 
 	                function next() {
@@ -1256,10 +1330,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	                }
 
 	                function resolveReference (bundle,resource,reference) {
-	                    var refID = normalizeRefID(resource,reference);
+	                    var referenceID = reference.reference;
 	                    fhirAPI.resolve({'bundle': bundle, 'resource': resource, 'reference':reference}).then(function(res){
 	                      var referencedObject = res.data || res.content;
-	                      resolvedReferences[refID] = referencedObject;
+	                      resolvedReferences[referenceID] = referencedObject;
 	                      next();
 	                    });
 	                }
@@ -1291,7 +1365,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	          
 	        return ret.promise;
 	    };
-
+	    
 	    function decorate (client, newAdapter) {
 	        fhirAPI = client;
 	        adapter = newAdapter;
@@ -1304,7 +1378,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    module.exports = decorate;
 	}).call(this);
 
-/***/ }
+/***/ })
 /******/ ])
 });
 ;
@@ -17478,6 +17552,17 @@ function FhirClient(p) {
       serviceUrl: p.serviceUrl,
       auth: p.auth || {type: 'none'}
     }
+
+    function getFhirConfig() {
+      var fhirConfig = {
+        baseUrl: server.serviceUrl,
+        auth: auth
+      };
+      if (client.headers) {
+        fhirConfig.headers = client.headers;
+      }
+      return fhirConfig;
+    }
     
     var auth = {};
     
@@ -17492,25 +17577,53 @@ function FhirClient(p) {
         };
     }
     
-    client.api = fhir({
+    // client.api = fhir({
+    //     baseUrl: server.serviceUrl,
+    //     auth: auth
+    // });
+
+    function getPatientFhirConfig() {
+      var patientFhirConfig = {
         baseUrl: server.serviceUrl,
-        auth: auth
-    });
+        auth: auth,
+        patient: p.patientId
+      };
+      if (client.headers) {
+        patientFhirConfig.headers = client.headers;
+      }
+      console.log("GET PATIENT FHIR CONFIG", patientFhirConfig);
+      return patientFhirConfig;
+    }
+
+    client.setHeaders = function(customHeaders) {
+      if (customHeaders) {
+        client.headers = customHeaders;
+        // Reset the client patient API FHIR object that gets passed via the client to accept any custom headers
+        if (p.patientId) {
+          var patientFhirConfig = getPatientFhirConfig();
+          client.patient.api = fhir(patientFhirConfig);
+        }
+        console.log("SET HEADERS", customHeaders);
+      } else {
+        if (client.headers) {
+          delete client['headers'];
+        }
+      }
+    }
+
+    client.api = function() {
+      return fhir(getFhirConfig());
+    }
     
     if (p.patientId) {
         client.patient = {};
         client.patient.id = p.patientId;
-        client.patient.api = fhir({
-            baseUrl: server.serviceUrl,
-            auth: auth,
-            patient: p.patientId
-        });
+
+        client.patient.api = fhir(getPatientFhirConfig());
         client.patient.read = function(){
             return client.get({resource: 'Patient'});
         };
     }
-    
-    var fhirAPI = (client.patient)?client.patient.api:client.api;
 
     client.userId = p.userId;
 
@@ -17544,6 +17657,7 @@ function FhirClient(p) {
     client.get = function(p) {
         var ret = Adapter.get().defer();
         var params = {type: p.resource};
+        var fhirAPI = (client.patient) ? client.patient.api : client.api;
         
         if (p.id) {
             params["id"] = p.id;

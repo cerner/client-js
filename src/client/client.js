@@ -24,6 +24,20 @@ function FhirClient(p) {
       serviceUrl: p.serviceUrl,
       auth: p.auth || {type: 'none'}
     }
+
+    function getFhirConfig(patient) {
+      var fhirConfig = {
+        baseUrl: server.serviceUrl,
+        auth: auth
+      };
+      if (patient && patient.patientId) {
+        fhirConfig.patient = patient.patientId;
+      }
+      if (client.headers) {
+        fhirConfig.headers = client.headers;
+      }
+      return fhirConfig;
+    }
     
     var auth = {};
     
@@ -37,26 +51,36 @@ function FhirClient(p) {
             bearer: server.auth.token
         };
     }
-    
-    client.api = fhir({
-        baseUrl: server.serviceUrl,
-        auth: auth
-    });
+
+    client.setHeaders = function(customHeaders) {
+      if (customHeaders) {
+        client.headers = customHeaders;
+      } else {
+        if (client.headers) {
+          delete client['headers'];
+        }
+      }
+
+      // Reset the client patient API FHIR object to use or remove custom headers passed in for the client
+      if (p.patientId) {
+        var patientFhirConfig = getFhirConfig(p);
+        client.patient.api = fhir(patientFhirConfig);
+      }
+    }
+
+    client.api = function() {
+      return fhir(getFhirConfig());
+    }
     
     if (p.patientId) {
         client.patient = {};
         client.patient.id = p.patientId;
-        client.patient.api = fhir({
-            baseUrl: server.serviceUrl,
-            auth: auth,
-            patient: p.patientId
-        });
+
+        client.patient.api = fhir(getFhirConfig(p));
         client.patient.read = function(){
             return client.get({resource: 'Patient'});
         };
     }
-    
-    var fhirAPI = (client.patient)?client.patient.api:client.api;
 
     client.userId = p.userId;
 
@@ -90,6 +114,7 @@ function FhirClient(p) {
     client.get = function(p) {
         var ret = Adapter.get().defer();
         var params = {type: p.resource};
+        var fhirAPI = (client.patient) ? client.patient.api : client.api;
         
         if (p.id) {
             params["id"] = p.id;
