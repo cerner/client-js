@@ -24,9 +24,8 @@ function FhirClient(p) {
       serviceUrl: p.serviceUrl,
       auth: p.auth || {type: 'none'}
     }
-    
+
     var auth = {};
-    
     if (server.auth.type === 'basic') {
         auth = {
             user: server.auth.username,
@@ -37,26 +36,54 @@ function FhirClient(p) {
             bearer: server.auth.token
         };
     }
-    
-    client.api = fhir({
+
+    function getFhirConfig(patientId) {
+      var fhirConfig = {
         baseUrl: server.serviceUrl,
         auth: auth
-    });
-    
-    if (p.patientId) {
-        client.patient = {};
-        client.patient.id = p.patientId;
-        client.patient.api = fhir({
-            baseUrl: server.serviceUrl,
-            auth: auth,
-            patient: p.patientId
-        });
-        client.patient.read = function(){
-            return client.get({resource: 'Patient'});
-        };
+      };
+
+      if (patientId) {
+        fhirConfig.patient = patientId;
+      }
+
+      if (client.headers || p.headers) {
+        // client.headers has precedence when same headers are set
+        fhirConfig.headers = Object.assign({}, p.headers, client.headers);
+      }
+
+      return fhirConfig;
     }
-    
-    var fhirAPI = (client.patient)?client.patient.api:client.api;
+
+    client.setHeaders = function(customHeaders) {
+      if (customHeaders) {
+        client.headers = customHeaders;
+      } else {
+        if (client.headers) {
+          delete client['headers'];
+        }
+      }
+
+      // Reset the client patient API FHIR object to use or remove custom headers passed in for the client
+      if (p.patientId) {
+        var patientFhirConfig = getFhirConfig(p.patientId);
+        client.patient.api = fhir(patientFhirConfig);
+      }
+    };
+
+    client.api = function() {
+      return fhir(getFhirConfig());
+    };
+
+    if (p.patientId) {
+      client.patient = {};
+      client.patient.id = p.patientId;
+
+      client.patient.api = fhir(getFhirConfig(p.patientId));
+      client.patient.read = function() {
+        return client.get({resource: 'Patient'});
+      };
+    }
 
     client.userId = p.userId;
 
@@ -65,10 +92,10 @@ function FhirClient(p) {
     };
 
     if (!client.server.serviceUrl || !client.server.serviceUrl.match(/https?:\/\/.+[^\/]$/)) {
-      throw "Must supply a `server` property whose `serviceUrl` begins with http(s) " + 
+      throw "Must supply a `server` property whose `serviceUrl` begins with http(s) " +
         "and does NOT include a trailing slash. E.g. `https://fhir.aws.af.cm/fhir`";
     }
-    
+
     client.authenticated = function(p) {
       if (server.auth.type === 'none') {
         return p;
@@ -90,18 +117,19 @@ function FhirClient(p) {
     client.get = function(p) {
         var ret = Adapter.get().defer();
         var params = {type: p.resource};
-        
+        var fhirAPI = (client.patient) ? client.patient.api : client.api;
+
         if (p.id) {
             params["id"] = p.id;
         }
-          
+
         fhirAPI.read(params)
             .then(function(res){
                 ret.resolve(res.data);
             }, function(){
                 ret.reject("Could not fetch " + p.resource + " " + p.id);
             });
-          
+
         return ret.promise;
     };
 
