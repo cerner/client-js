@@ -45,8 +45,6 @@ There are two ways to achieve this.
 1. Using the `input` argument of `FHIR.oauth2.ready` function at initialization
 
     ```
-    { 'headers': {'Accept-Language': 'en-US'} }
-
     FHIR.oauth2.ready({ 'headers': {'Accept-Language': 'en-US'} }, callback, errback);
     ```
 
