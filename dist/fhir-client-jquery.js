@@ -15073,7 +15073,7 @@ module.exports={
   "_args": [
     [
       "elliptic@6.4.0",
-      "/Users/kk014173/tmp_workspace/client-js"
+      "/Users/va071208/IgneousRepos/client-js"
     ]
   ],
   "_from": "elliptic@6.4.0",
@@ -15098,7 +15098,7 @@ module.exports={
   ],
   "_resolved": "https://registry.npmjs.org/elliptic/-/elliptic-6.4.0.tgz",
   "_spec": "6.4.0",
-  "_where": "/Users/kk014173/tmp_workspace/client-js",
+  "_where": "/Users/va071208/IgneousRepos/client-js",
   "author": {
     "name": "Fedor Indutny",
     "email": "fedor@indutny.com"
@@ -27031,6 +27031,7 @@ utils.units = {
     if(pq.code == "[in_i]") return 2.54*pq.value;
     if(pq.code == "ft") return 30.48*pq.value;
     if(pq.code == "[ft_us]") return 30.48*pq.value;
+    if(pq.code == "[ft_i]") return 30.48*pq.value;
     throw "Unrecognized length unit: " + pq.code
   },
   kg: function(pq){
